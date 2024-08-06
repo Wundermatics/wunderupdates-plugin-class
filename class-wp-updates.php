@@ -4,7 +4,7 @@ class WunderUpdates_ACCOUNT_NAME_PLUGIN_SLUG {
 	/**
 	 * Default WP Updates API URL.
 	 */
-	const UPDATE_BASE = 'https://d3ga1v40bd0qfl.cloudfront.net';
+	const UPDATE_BASE = 'https://api.wunderupdates.com';
 
 	/**
 	 * API Cache Time.
