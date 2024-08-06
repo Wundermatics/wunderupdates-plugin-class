@@ -1,6 +1,6 @@
 <?php
 
-class WP_Updates_CHANGE_THIS {
+class WunderUpdates_ACCOUNT_NAME_PLUGIN_SLUG {
 	/**
 	 * Default WP Updates API URL.
 	 */

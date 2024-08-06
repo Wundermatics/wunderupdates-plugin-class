@@ -24,7 +24,7 @@ To avoid conflicts with other plugins that may use the same class name, you shou
 We suggest naming the class to match your WunderUpdates account key and plugin slug, for example:
 
 ```php
-class WP_Updates_abcde123_hello_world {
+class WunderUpdates_abcde123_hello_world {
     // ...rest of the class here.
 }
 ``` 
@@ -34,7 +34,7 @@ To configure the class in your plugin, you need to include it and set some prope
 
 ```php
 require_once __DIR__ . '/class-wp-updates.php';
-$updates = new WP_Updates_abcde123_hello_world( array(
+$updates = new WunderUpdates_abcde123_hello_world( array(
 		'version'     => '1.0.0',      // The current version of the plugin.
 		'slug'        => 'hello-nick', // Plugin slug.
 		'full_path'   => __FILE__,     // Full path to the root plugin file.
