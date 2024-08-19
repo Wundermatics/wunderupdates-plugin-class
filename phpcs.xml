@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ruleset name="wordpress">
+    <config name="testVersion" value="7.4-"/>
+    <description>Just the WordPress-Extra</description>
+
+    <!-- Add WordPress -->
+    <rule ref="WordPress-Extra"/>
+
+</ruleset>
