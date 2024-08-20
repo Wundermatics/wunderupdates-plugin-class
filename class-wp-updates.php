@@ -1,394 +1,408 @@
 <?php
-class WunderUpdates_ACCOUNT_NAME_PLUGIN_SLUG
-{
-    /**
-     * Default WP Updates API URL.
-     */
-    const UPDATE_BASE = 'https://api.wunderupdates.com';
 
-    /**
-     * API Cache Time.
-     */
-    protected $cache_time = HOUR_IN_SECONDS * 12;
+// phpcs:disable WordPress.Files.FileName
+class WunderUpdates_ACCOUNT_NAME_PLUGIN_SLUG {
+	/**
+	 * Default WP Updates API URL.
+	 */
+	const UPDATE_BASE = 'https://api.wunderupdates.com';
 
-    /**
-     * Plugin update properties.
-     *
-     * @var array
-     */
-    protected $properties = array();
+	/**
+	 * API Cache Time.
+	 */
+	private $cache_time = HOUR_IN_SECONDS * 12;
 
-    /**
-     * Transient key.
-     *
-     * @var array
-     */
-    protected $transient_key;
+	/**
+	 * Plugin update properties.
+	 *
+	 * @var array
+	 */
+	private $properties = array();
 
-    /**
-     * Valid release channel keys.
-     *
-     * @var array
-     */
-    protected $release_channels = array(
-    'stable' => 'Stable releases',
-    'rc'     => 'Release Candidates',
-    'beta'   => 'Beta versions',
-    'alpha'  => 'Alpha versions',
-    );
+	/**
+	 * Transient key.
+	 *
+	 * @var array
+	 */
+	private $transient_key;
 
-    /**
-     * Register hooks.
-     *
-     * @param array $properties
-     *
-     * @return void
-     */
-    public function register( $properties )
-    {
-        $this->properties = $properties;
-        $this->set_defaults();
+	/**
+	 * Valid release channel keys.
+	 *
+	 * @var array
+	 */
+	private $release_channels = array(
+		'stable' => 'Stable releases',
+		'rc'     => 'Release candidates',
+		'beta'   => 'Beta versions',
+		'alpha'  => 'Alpha versions',
+	);
 
-        $this->transient_key = 'wunderupdates_info_response_' . sanitize_title($this->properties['slug']);
-        $base_name           = $this->properties['base_name'];
+	/**
+	 * Register hooks.
+	 *
+	 * @param array $properties
+	 *
+	 * @return void
+	 */
+	public function register( $properties ) {
+		$this->properties = $properties;
+		$this->set_defaults();
 
-        add_filter('plugins_api', array( $this, 'filter_plugin_update_info' ), 20, 3);
-        add_filter('site_transient_update_plugins', array( $this, 'filter_plugin_update_transient' ));
-        add_filter('plugin_row_meta', array( $this, 'filter_plugin_row_meta' ), 10, 4);
-        add_action("in_plugin_update_message-$base_name", array( $this, 'action_in_plugin_update_message' ), 10, 2);
+		$this->transient_key = 'wunderupdates_info_response_' . sanitize_title( $this->properties['slug'] );
+		$base_name           = $this->properties['base_name'];
 
-        $md5    = md5($this->properties['slug']);
-        $action = 'wp_ajax_wunderupdates-verify-license-' . $md5;
-        add_action($action, array( $this, 'ajax_verify_license' ));
+		add_filter( 'plugins_api', array( $this, 'filter_plugin_update_info' ), 20, 3 );
+		add_filter( 'site_transient_update_plugins', array( $this, 'filter_plugin_update_transient' ) );
+		add_filter( 'plugin_row_meta', array( $this, 'filter_plugin_row_meta' ), 10, 4 );
+		add_action( "in_plugin_update_message-$base_name", array( $this, 'action_in_plugin_update_message' ), 10, 2 );
 
-        $action = 'wp_ajax_wunderupdates-save-channel-' . $md5;
-        add_action($action, array( $this, 'ajax_save_channel' ));
+		$md5    = md5( $this->properties['slug'] );
+		$action = 'wp_ajax_wunderupdates-verify-license-' . $md5;
+		add_action( $action, array( $this, 'ajax_verify_license' ) );
 
-        $this->cache_time = apply_filters("wunderupdates_cache_time_$base_name", $this->cache_time);
-    }
+		$action = 'wp_ajax_wunderupdates-save-channel-' . $md5;
+		add_action( $action, array( $this, 'ajax_save_channel' ) );
 
-    /**
-     * Filter the plugin update transient add our info to update notifications.
-     *
-     * @handles site_transient_update_plugins
-     *
-     * @param object $transient
-     *
-     * @return object
-     */
-    public function filter_plugin_update_transient( $transient )
-    {
-        if (empty($transient->checked) ) {
-            return $transient;
-        }
+		$this->cache_time = apply_filters( "wunderupdates_cache_time_$base_name", $this->cache_time );
+	}
 
-        $result = $this->fetch_plugin_info();
+	/**
+	 * Filter the plugin update transient add our info to update notifications.
+	 *
+	 * @handles site_transient_update_plugins
+	 *
+	 * @param object $transient
+	 *
+	 * @return object
+	 */
+	public function filter_plugin_update_transient( $transient ) {
+		if ( empty( $transient->checked ) ) {
+			return $transient;
+		}
 
-        if (false === $result ) {
-            return $transient;
-        }
+		$result = $this->fetch_plugin_info();
 
-        if (version_compare($this->properties['version'], $result->version, '<') ) {
-            $res                                 = $this->parse_plugin_info($result);
-            $transient->response[ $res->plugin ] = $res;
-            $transient->checked[ $res->plugin ]  = $result->version;
-        }
+		if ( false === $result ) {
+			return $transient;
+		}
 
-        return $transient;
-    }
+		if ( version_compare( $this->properties['version'], $result->version, '<' ) ) {
+			$res                                 = $this->parse_plugin_info( $result );
+			$transient->response[ $res->plugin ] = $res;
+			$transient->checked[ $res->plugin ]  = $result->version;
+		}
 
-    /**
-     * Filters the plugin update information.
-     *
-     * @param object $res
-     * @param string $action
-     * @param object $args
-     *
-     * @handles plugins_api
-     *
-     * @return object
-     */
-    public function filter_plugin_update_info( $res, $action, $args )
-    {
-        // Not our plugin slug.
-        if ($this->properties['slug'] !== $args->slug ) {
-            return $res;
-        }
+		return $transient;
+	}
 
-        // Not the action we want to handle.
-        if ('plugin_information' !== $action ) {
-            return $res;
-        }
+	/**
+	 * Filters the plugin update information.
+	 *
+	 * @param object $res
+	 * @param string $action
+	 * @param object $args
+	 *
+	 * @handles plugins_api
+	 *
+	 * @return object
+	 */
+	public function filter_plugin_update_info( $res, $action, $args ) {
+		// Not our plugin slug.
+		if ( $this->properties['slug'] !== $args->slug ) {
+			return $res;
+		}
 
-        $result = $this->fetch_plugin_info();
+		// Not the action we want to handle.
+		if ( 'plugin_information' !== $action ) {
+			return $res;
+		}
 
-        // do nothing if we don't get the correct response from the server
-        if (false === $result ) {
-            return $res;
-        }
+		$result = $this->fetch_plugin_info();
 
-        return $this->parse_plugin_info($result);
-    }
+		// do nothing if we don't get the correct response from the server
+		if ( false === $result ) {
+			return $res;
+		}
 
-    /**
-     * Check if a provided license is valid via ajax.
-     *
-     * @handles wp_ajax_wunderupdates-verify-license-[md5]
-     */
-    public function ajax_verify_license()
-    {
-        // Todo: Check nonce.
-        $license_key = trim(sanitize_text_field($_POST['license']));
+		return $this->parse_plugin_info( $result );
+	}
 
-        // Remove existing transient.
-        delete_transient($this->transient_key);
+	/**
+	 * Check if a provided license is valid via ajax.
+	 *
+	 * @handles wp_ajax_wunderupdates-verify-license-[md5]
+	 */
+	public function ajax_verify_license() {
+		$nonce = sanitize_text_field( $_POST['nonce'] );
+		if ( ! wp_verify_nonce( $nonce, 'wunderupdates' ) ) {
+			wp_send_json_error();
+		}
+		$license_key = trim( sanitize_text_field( $_POST['license'] ) );
 
-        // If the license check succeeded, save the key and return.
-        $license_response = $this->fetch_plugin_info($license_key);
-        if (( $license_response->license ?? false ) && ( $license_response->license->valid ?? false ) ) {
-            update_option($this->properties['license_option_key'], $license_key);
-            wp_send_json_success(
-                (object) array(
-                'valid' => true,
-                )
-            );
-        }
+		// Remove existing transient.
+		delete_transient( $this->transient_key );
 
-        // No luck. Delete option and return false.
-        delete_option($this->properties['license_option_key']);
-        wp_send_json_error(
-            (object) array(
-            'valid' => false,
-            )
-        );
-    }
+		// If the license check succeeded, save the key and return.
+		$license_response = $this->fetch_plugin_info( $license_key );
+		if ( ( $license_response->license ?? false ) && ( $license_response->license->valid ?? false ) ) {
+			update_option( $this->properties['license_option_key'], $license_key );
+			wp_send_json_success(
+				(object) array(
+					'valid' => true,
+				)
+			);
+		}
 
-    /**
-     * Save the selected channel via ajax.
-     *
-     * @handles wp_ajax_wunderupdates-save-channel-[md5]
-     */
-    public function ajax_save_channel()
-    {
-        // Todo: Check nonce.
-        $channel = sanitize_text_field($_POST['channel']);
+		// No luck. Delete option and return false.
+		delete_option( $this->properties['license_option_key'] );
+		wp_send_json_error(
+			(object) array(
+				'valid' => false,
+			)
+		);
+	}
 
-        if (! array_key_exists($channel, $this->release_channels) ) {
-            wp_send_json_error();
-        }
+	/**
+	 * Save the selected channel via ajax.
+	 *
+	 * @handles wp_ajax_wunderupdates-save-channel-[md5]
+	 */
+	public function ajax_save_channel() {
+		$nonce = sanitize_text_field( $_POST['nonce'] );
+		if ( ! wp_verify_nonce( $nonce, 'wunderupdates' ) ) {
+			wp_send_json_error();
+		}
+		$channel = sanitize_text_field( $_POST['channel'] );
 
-        update_option($this->properties['channel_option_key'], $channel);
+		if ( ! array_key_exists( $channel, $this->release_channels ) ) {
+			wp_send_json_error();
+		}
 
-        wp_send_json_success();
-    }
+		// Save the channel.
+		update_option( $this->properties['channel_option_key'], $channel );
 
-    /**
-     * Fetches the plugin update object from the server API.
-     *
-     * @param string|null $license_key
-     *
-     * @return object|false
-     */
-    private function fetch_plugin_info( $license_key = null )
-    {
-        //Test cache first.
-        $response = get_transient($this->transient_key);
+		// Remove existing transient.
+		delete_transient( $this->transient_key );
 
-        if (empty($response) ) {
-            $url = sprintf(
-                '%s/v1/public/%s/plugins/%s',
-                self::UPDATE_BASE,
-                $this->properties['account_key'],
-                $this->properties['slug']
-            );
+		wp_send_json_success();
+	}
 
-            if ($this->properties['licensed'] ?? false ) {
-                   // If the license key wasn't provided, get it.
-                if (is_null($license_key) ) {
-                    $option_name = $this->properties['license_option_key'];
-                    $license_key = '';
-                }
+	/**
+	 * Fetches the plugin update object from the server API.
+	 *
+	 * @param string|null $license_key
+	 *
+	 * @return object|false
+	 */
+	private function fetch_plugin_info( $license_key = null ) {
+		//Test cache first.
+		$response = get_transient( $this->transient_key );
 
-                   // Add the key to the URL.
-                   $url .= '?key=' . $license_key;
-            }
+		if ( empty( $response ) ) {
+			$url = sprintf(
+				'%s/v1/public/%s/plugins/%s',
+				self::UPDATE_BASE,
+				$this->properties['account_key'],
+				$this->properties['slug']
+			);
 
-            $response = wp_remote_get(
-                $url,
-                array(
-                'timeout' => 10,
-                'headers' => array(
-                'Accept' => 'application/json',
-                ),
-                )
-            );
+			if ( 'stable' !== $this->properties['channel'] ) {
+				$url .= '/' . $this->properties['channel'];
+			}
 
-            if (is_wp_error($response) 
-                || wp_remote_retrieve_response_code($response) !== 200 
-                || empty(wp_remote_retrieve_body($response))
-            ) {
-                   return false;
-            }
+			if ( $this->properties['licensed'] ?? false ) {
+				// If the license key wasn't provided, get it.
+				if ( is_null( $license_key ) ) {
+					$option_name = $this->properties['license_option_key'];
+					$license_key = get_option( $option_name, false );
+				}
 
-            $response = wp_remote_retrieve_body($response);
+				// Add the key to the URL.
+				$url .= '?key=' . $license_key;
+			}
 
-            //Cache the response
-            set_transient($this->transient_key, $response, $this->cache_time);
-        }
+			$response = wp_remote_get(
+				$url,
+				array(
+					'timeout' => 10,
+					'headers' => array(
+						'Accept' => 'application/json',
+					),
+				)
+			);
 
-        return json_decode($response);
-    }
+			if (
+				is_wp_error( $response ) ||
+				wp_remote_retrieve_response_code( $response ) !== 200 ||
+				empty( wp_remote_retrieve_body( $response ) )
+			) {
+				return false;
+			}
 
-    /**
-     * Parses the product info response.
-     *
-     * @param object $response
-     *
-     * @return stdClass
-     */
-    private function parse_plugin_info( $response )
-    {
-        $res                = new stdClass();
-        $res->name          = $response->plugin_name ?? '';
-        $res->slug          = $this->properties['slug'];
-        $res->version       = $response->version ?? '';
-        $res->requires      = $response->requires_at_least ?? '';
-        $res->requires_php  = $response->requires_php ?? '';
-        $res->download_link = $response->download_link ?? '';
-        $res->new_version   = $response->version ?? '';
-        $res->plugin        = $this->properties['base_name'] ?? 'Unknown';
-        $res->package       = $response->download_link ?? '';
-        $res->tested        = $response->tested_up_to ?? '';
+			$response = wp_remote_retrieve_body( $response );
 
-        $res->sections = array(
-        'description' => $response->sections->description ?? '',
-        'changelog'   => $response->sections->changelog ?? '',
-        );
+			//Cache the response
+			set_transient( $this->transient_key, $response, $this->cache_time );
+		}
 
-        return $res;
-    }
+		return json_decode( $response );
+	}
 
-    /**
-     * Populate default values for the plugin properties.
-     *
-     * @return void
-     */
-    private function set_defaults()
-    {
-        $required = array( 'plugin_name', 'slug', 'version', 'full_path' );
-        $missing  = array_diff($required, array_keys($this->properties));
-        if (! empty($missing) ) {
-            $this->properties['error']     = 'WunderUpdates is missing required properties: ' . join(', ', $missing);
-            $this->properties['base_name'] = '';
+	/**
+	 * Parses the product info response.
+	 *
+	 * @param object $response
+	 *
+	 * @return stdClass
+	 */
+	private function parse_plugin_info( $response ) {
+		$res                = new stdClass();
+		$res->name          = $response->plugin_name ?? '';
+		$res->slug          = $this->properties['slug'];
+		$res->version       = $response->version ?? '';
+		$res->requires      = $response->requires_at_least ?? '';
+		$res->requires_php  = $response->requires_php ?? '';
+		$res->download_link = $response->download_link ?? '';
+		$res->new_version   = $response->version ?? '';
+		$res->plugin        = $this->properties['base_name'] ?? 'Unknown';
+		$res->package       = $response->download_link ?? '';
+		$res->tested        = $response->tested_up_to ?? '';
 
-            return;
-        }
+		$res->sections = array(
+			'description' => $response->sections->description ?? '',
+			'changelog'   => $response->sections->changelog ?? '',
+		);
 
-        $parts                         = explode('/', $this->properties['full_path']);
-        $this->properties['base_name'] = join('/', array_slice($parts, -2));
+		return $res;
+	}
 
-        // Defaults for license popup strings.
-        $license_popup_strings                     = array(
-        'title'              => 'License key - ' . $this->properties['plugin_name'],
-        'description'        => 'Enter your license key to enable updates',
-        'validation_success' => 'License key is valid.',
-        'validation_fail'    => 'License key validation failed.',
-        );
-        $this->properties['license_popup_strings'] = isset($this->properties['license_popup_strings']) ?
-        array_merge($license_popup_strings, $this->properties['license_popup_strings']) :
-        $license_popup_strings;
+	/**
+	 * Populate default values for the plugin properties.
+	 *
+	 * @return void
+	 */
+	private function set_defaults() {
+		$required = array( 'plugin_name', 'slug', 'version', 'full_path' );
+		$missing  = array_diff( $required, array_keys( $this->properties ) );
+		if ( ! empty( $missing ) ) {
+			$this->properties['error']     = 'WunderUpdates is missing required properties: ' . join( ', ', $missing );
+			$this->properties['base_name'] = '';
 
-        // Defaults for channel popup strings.
-        $channel_popup_strings = array(
-        'title'              => 'Select update channel - ' . $this->properties['plugin_name'],
-        'validation_success' => 'Update channel saved.',
-        'validation_fail'    => 'Failed to save update channel.',
-        );
+			return;
+		}
 
-        $this->properties['channel_popup_strings'] = isset($this->properties['channel_popup_strings']) ?
-        array_merge($channel_popup_strings, $this->properties['channel_popup_strings']) :
-        $channel_popup_strings;
+		$this->properties = array_filter(
+			$this->properties,
+			function ( $value ) {
+				return ! empty( $value );
+			}
+		);
 
-        $default = array(
-        'base_name'             => '',
-        'licensed'              => false,
-        'license_option_key'    => 'wunderupdates_license_' . $this->properties['slug'],
-        'channel_option_key'    => 'wunderupdates_channel_' . $this->properties['slug'],
-        'license_popup'         => false,
-        'allow_channels'        => false,
-        'channel'               => 'stable',
-        'license_popup_strings' => $license_popup_strings,
-        'channel_popup_strings' => $channel_popup_strings,
-        'update_message'        => 'Enter a valid license key get updates.',
-        );
+		$parts                         = explode( '/', $this->properties['full_path'] );
+		$this->properties['base_name'] = join( '/', array_slice( $parts, -2 ) );
 
-        $this->properties = array_merge($default, $this->properties);
+		// Defaults for license popup strings.
+		$license_popup_strings                     = array(
+			'title'              => 'License key - ' . $this->properties['plugin_name'],
+			'description'        => 'Enter your license key to enable updates',
+			'validation_success' => 'License key is valid.',
+			'validation_fail'    => 'License key validation failed.',
+		);
+		$this->properties['license_popup_strings'] = isset( $this->properties['license_popup_strings'] ) ?
+			array_merge( $license_popup_strings, $this->properties['license_popup_strings'] ) :
+			$license_popup_strings;
 
-        $channel                     = get_option($this->properties['channel_option_key'], 'stable');
-        $this->properties['channel'] = array_key_exists($channel, $this->release_channels) ? $channel : 'stable';
-    }
+		// Defaults for channel popup strings.
+		$channel_popup_strings = array(
+			'title'              => 'Select update channel - ' . $this->properties['plugin_name'],
+			'validation_success' => 'Update channel saved.',
+			'validation_fail'    => 'Failed to save update channel.',
+		);
 
-    /**
-     * Filter the plugin row meta.
-     *
-     * @param array  $plugin_meta
-     * @param string $plugin_file
-     *
-     * @return array
-     */
-    public function filter_plugin_row_meta( $plugin_meta, $plugin_file )
-    {
-        if ($this->properties['base_name'] !== $plugin_file ) {
-            return $plugin_meta;
-        }
+		$this->properties['channel_popup_strings'] = isset( $this->properties['channel_popup_strings'] ) ?
+			array_merge( $channel_popup_strings, $this->properties['channel_popup_strings'] ) :
+			$channel_popup_strings;
 
-        if (isset($this->properties['error']) ) {
-            $plugin_meta[] = $this->properties['error'];
-            return $plugin_meta;
-        }
+		$default = array(
+			'base_name'             => '',
+			'licensed'              => false,
+			'license_option_key'    => 'wunderupdates_license_' . $this->properties['slug'],
+			'channel_option_key'    => 'wunderupdates_channel_' . $this->properties['slug'],
+			'license_popup'         => false,
+			'allow_channels'        => false,
+			'channel'               => 'stable',
+			'license_popup_strings' => $license_popup_strings,
+			'channel_popup_strings' => $channel_popup_strings,
+			'update_message'        => 'Enter a valid license key get updates.',
+		);
 
-        if (false !== $this->properties['licensed'] && $this->properties['license_popup'] ) {
-            include_once __DIR__ . '/popup.php';
-            $plugin_meta[] = sprintf(
-                '<a href="#" onClick="showLicensePopup()">%s</a>',
-                __('Enter license', 'wp-updates')
-            );
-        }
+		$this->properties = array_merge( $default, $this->properties );
 
-        if ($this->properties['allow_channels'] ) {
-            include_once __DIR__ . '/popup.php';
-            $plugin_meta[] = sprintf(
-                '%s: <a href="#" onClick="showChannelPopup()">%s</a>',
-                __('Channel', 'wp-updates'),
-                $this->release_channels[ $this->properties['channel'] ]
-            );
-        }
+		$channel                     = get_option( $this->properties['channel_option_key'], 'stable' );
+		$this->properties['channel'] = array_key_exists( $channel, $this->release_channels ) ? $channel : 'stable';
+	}
 
-        if (! $this->properties['allow_channels'] && 'stable' !== $this->properties['channel'] ) {
-            $plugin_meta[] = sprintf(
-                '%s: %s',
-                __('Channel', 'wp-updates'),
-                $this->release_channels[ $this->properties['channel'] ]
-            );
-        }
+	/**
+	 * Filter the plugin row meta.
+	 *
+	 * @param array  $plugin_meta
+	 * @param string $plugin_file
+	 *
+	 * @return array
+	 */
+	public function filter_plugin_row_meta( $plugin_meta, $plugin_file ) {
+		if ( $this->properties['base_name'] !== $plugin_file ) {
+			return $plugin_meta;
+		}
 
-        return $plugin_meta;
-    }
+		if ( isset( $this->properties['error'] ) ) {
+			$plugin_meta[] = $this->properties['error'];
+			return $plugin_meta;
+		}
 
-    /**
-     * Add a custom update message.
-     *
-     * @param array  $plugin_data
-     * @param string $response
-     *
-     * @return void
-     */
-    public function action_in_plugin_update_message( $plugin_data, $response )
-    {
-        if (! empty($response->package) ) {
-            return;
-        }
+		if ( false !== $this->properties['licensed'] && $this->properties['license_popup'] ) {
+			require_once __DIR__ . '/popup.php';
+			$plugin_meta[] = sprintf(
+				'<a href="#" onClick="showLicensePopup()">%s</a>',
+				__( 'Enter license', 'wp-updates' )
+			);
+		}
 
-        echo esc_html($this->properties['update_message']);
-    }
+		if ( $this->properties['allow_channels'] ) {
+			require_once __DIR__ . '/popup.php';
+			$plugin_meta[] = sprintf(
+				'%s: <a href="#" onClick="showChannelPopup()" class="change-channel-%s">%s</a>',
+				__( 'Channel', 'wp-updates' ),
+				$this->properties['slug'],
+				$this->release_channels[ $this->properties['channel'] ]
+			);
+		}
+
+		if ( ! $this->properties['allow_channels'] && 'stable' !== $this->properties['channel'] ) {
+			$plugin_meta[] = sprintf(
+				'%s: %s',
+				__( 'Channel', 'wp-updates' ),
+				$this->release_channels[ $this->properties['channel'] ]
+			);
+		}
+
+		return $plugin_meta;
+	}
+
+	/**
+	 * Add a custom update message.
+	 *
+	 * @param array  $plugin_data
+	 * @param string $response
+	 *
+	 * @return void
+	 */
+	public function action_in_plugin_update_message( $plugin_data, $response ) {
+		if ( ! empty( $response->package ) ) {
+			return;
+		}
+
+		echo esc_html( $this->properties['update_message'] );
+	}
 }
