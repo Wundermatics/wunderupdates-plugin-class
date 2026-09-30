@@ -34,11 +34,15 @@ To configure the class in your plugin, you need to include it and set some prope
 
 ```php
 require_once __DIR__ . '/class-wp-updates.php';
-$updates = new WunderUpdates_abcde123_hello_world( array(
-		'version'     => '1.0.0',      // The current version of the plugin.
-		'slug'        => 'hello-nick', // Plugin slug.
-		'full_path'   => __FILE__,     // Full path to the root plugin file.
-		'account_key' => 'DxirA2y6',   // Your WunderUpdates account key.
+$updates = new WunderUpdates_abcde123_hello_world();
+$updates->register( array(
+		'plugin_name' => 'Hello Nick',
+		'version'     => '1.0.0',
+		'slug'        => 'hello-nick',
+		'full_path'   => __FILE__,
+		'account_key' => 'DxirA2y6',
 	) );
 ```
+
+If you enable the license popup or the channel picker, copy `popup.php` into the same directory as the class. The channel switch property is `allow_channels`.
 
