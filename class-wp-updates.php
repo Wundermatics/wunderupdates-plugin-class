@@ -222,12 +222,18 @@ class WunderUpdates_ACCOUNT_NAME_PLUGIN_SLUG {
 				$url .= '?key=' . $license_key;
 			}
 
+			$site_host = wp_parse_url( home_url(), PHP_URL_HOST );
+
 			$response = wp_remote_get(
 				$url,
 				array(
 					'timeout' => 10,
 					'headers' => array(
-						'Accept' => 'application/json',
+						'Accept'      => 'application/json',
+						'X-WU-Site'   => is_string( $site_host ) ? $site_host : '',
+						'X-WU-PHP'    => PHP_VERSION,
+						'X-WU-WP'     => (string) get_bloginfo( 'version' ),
+						'X-WU-Plugin' => (string) $this->properties['version'],
 					),
 				)
 			);
