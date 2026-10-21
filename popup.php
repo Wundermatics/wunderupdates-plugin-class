@@ -165,11 +165,11 @@ $channel             = $this->properties['channel'];
 	</p>	
 	<p class="<?php echo esc_html( $channel_popup_id ); ?>-success" style="display:none">
 		<span class="dashicons dashicons-yes-alt"  style="color: green;"></span>
-		Update channel saved.
+		<?php echo esc_html( $this->properties['channel_popup_strings']['validation_success'] ); ?>
 
 	</p>
 	<p class="<?php echo esc_html( $channel_popup_id ); ?>-fail" style="display:none">
 		<span class="dashicons dashicons-no-alt" style="color: green;"></span>
-		Failed to save update channel.
+		<?php echo esc_html( $this->properties['channel_popup_strings']['validation_fail'] ); ?>
 	</p>
 </div>
