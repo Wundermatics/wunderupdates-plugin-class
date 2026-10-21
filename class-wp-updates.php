@@ -289,11 +289,26 @@ class WunderUpdates_ACCOUNT_NAME_PLUGIN_SLUG {
 	 * @return void
 	 */
 	private function set_defaults() {
-		$required = array( 'plugin_name', 'slug', 'version', 'full_path' );
-		$missing  = array_diff( $required, array_keys( $this->properties ) );
-		if ( ! empty( $missing ) ) {
-			$this->properties['error']     = 'WunderUpdates is missing required properties: ' . join( ', ', $missing );
+		$required = array( 'plugin_name', 'slug', 'version', 'full_path', 'account_key' );
+
+		// The plugin row filter matches on base_name, so it is set before the
+		// required check: a missing property can then be shown on the row.
+		if ( isset( $this->properties['full_path'] ) && '' !== $this->properties['full_path'] ) {
+			$parts                         = explode( '/', $this->properties['full_path'] );
+			$this->properties['base_name'] = join( '/', array_slice( $parts, -2 ) );
+		} else {
 			$this->properties['base_name'] = '';
+		}
+
+		$missing = array();
+		foreach ( $required as $key ) {
+			if ( ! isset( $this->properties[ $key ] ) || '' === $this->properties[ $key ] ) {
+				$missing[] = $key;
+			}
+		}
+
+		if ( ! empty( $missing ) ) {
+			$this->properties['error'] = 'WunderUpdates is missing required properties: ' . join( ', ', $missing );
 
 			return;
 		}
@@ -304,9 +319,6 @@ class WunderUpdates_ACCOUNT_NAME_PLUGIN_SLUG {
 				return ! empty( $value );
 			}
 		);
-
-		$parts                         = explode( '/', $this->properties['full_path'] );
-		$this->properties['base_name'] = join( '/', array_slice( $parts, -2 ) );
 
 		// Defaults for license popup strings.
 		$license_popup_strings                     = array(
@@ -345,7 +357,12 @@ class WunderUpdates_ACCOUNT_NAME_PLUGIN_SLUG {
 
 		$this->properties = array_merge( $default, $this->properties );
 
-		$channel                     = get_option( $this->properties['channel_option_key'], 'stable' );
+		// A stored option wins. Without one, the value passed to register()
+		// is the default, and an unknown value falls back to stable.
+		$channel                     = get_option(
+			$this->properties['channel_option_key'],
+			$this->properties['channel']
+		);
 		$this->properties['channel'] = array_key_exists( $channel, $this->release_channels ) ? $channel : 'stable';
 	}
 
